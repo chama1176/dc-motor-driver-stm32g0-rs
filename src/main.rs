@@ -22,15 +22,14 @@ use stm32g0::stm32g030::Interrupt::TIM14;
 
 mod app;
 mod indicator;
-mod rs485_trigger_stm32g0;
+mod dc_motor_driver_stm32g0;
 
 static G_APP: Mutex<
     RefCell<
         Option<
             app::App<
-                rs485_trigger_stm32g0::Led0,
-                rs485_trigger_stm32g0::Led1,
-                rs485_trigger_stm32g0::TriggerOut0,
+                dc_motor_driver_stm32g0::Led0,
+                dc_motor_driver_stm32g0::Led1,
             >,
         >,
     >,
@@ -42,14 +41,13 @@ static G_APP: Mutex<
 #[interrupt]
 fn EXTI0_1() {
     // SYSCFG_ITLINE5でステータスが見れそう
-    rs485_trigger_stm32g0::external_input_interrupt_task();
+    dc_motor_driver_stm32g0::external_input_interrupt_task();
     // defmt::warn!("exti");
 }
 
 #[interrupt]
 fn TIM14() {
-    rs485_trigger_stm32g0::timer_interrupt_task();
-    // defmt::error!("toggle");
+    dc_motor_driver_stm32g0::timer_interrupt_task();
 }
 
 #[entry]
@@ -61,28 +59,25 @@ fn main() -> ! {
     let perip = stm32g030::Peripherals::take().unwrap();
     let mut core_perip = stm32g030::CorePeripherals::take().unwrap();
 
-    rs485_trigger_stm32g0::clock_init(&perip, &mut core_perip);
-    rs485_trigger_stm32g0::exti_init(&perip, &mut core_perip);
+    dc_motor_driver_stm32g0::clock_init(&perip, &mut core_perip);
+    dc_motor_driver_stm32g0::exti_init(&perip, &mut core_perip);
 
     // init g peripheral
-    rs485_trigger_stm32g0::init_g_peripheral(perip);
+    dc_motor_driver_stm32g0::init_g_peripheral(perip);
 
-    let led0 = rs485_trigger_stm32g0::Led0::new();
+    let led0 = dc_motor_driver_stm32g0::Led0::new();
     led0.init();
     led0.off();
-    let led1 = rs485_trigger_stm32g0::Led1::new();
+    let led1 = dc_motor_driver_stm32g0::Led1::new();
     led1.init();
     led1.off();
-    let trigger_out = rs485_trigger_stm32g0::TriggerOut0::new();
-    trigger_out.init();
-    trigger_out.off();
 
-    let app = app::App::new(led0, led1, trigger_out);
+    let app = app::App::new(led0, led1);
     free(|cs| G_APP.borrow(cs).replace(Some(app)));
 
     let mut t = 0;
     free(|cs| {
-        match rs485_trigger_stm32g0::G_PERIPHERAL
+        match dc_motor_driver_stm32g0::G_PERIPHERAL
             .borrow(cs)
             .borrow()
             .as_ref()
@@ -98,7 +93,7 @@ fn main() -> ! {
 
     loop {
         free(|cs| {
-            match rs485_trigger_stm32g0::G_PERIPHERAL
+            match dc_motor_driver_stm32g0::G_PERIPHERAL
                 .borrow(cs)
                 .borrow()
                 .as_ref()

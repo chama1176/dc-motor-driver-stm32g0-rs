@@ -2,7 +2,7 @@
 authors = ["kaede <kaede6120@gmail.com>"]
 edition = "2018"
 readme = "README.md"
-name = "rs485-trigger-stm32g0"
+name = "dc-motor-driver-stm32g0"
 version = "0.1.0"
 
 [dependencies]
@@ -32,7 +32,7 @@ version = "0.15.1"
 
 # this lets you use `cargo fix`!
 [[bin]]
-name = "rs485-trigger-stm32g0"
+name = "dc-motor-driver-stm32g0"
 test = false
 bench = false
 

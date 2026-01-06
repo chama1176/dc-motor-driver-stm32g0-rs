@@ -20,7 +20,7 @@
             "coreConfigs": [
                 {
                 //!MODIFY
-                "programBinary": "${workspaceRoot}\\target\\thumbv6m-none-eabi\\debug\\rs485-trigger-stm32g0",
+                "programBinary": "${workspaceRoot}\\target\\thumbv6m-none-eabi\\debug\\dc-motor-driver-stm32g0",
                 "coreIndex": 0,
                 "rttEnabled": true
                 }

@@ -129,26 +129,6 @@ pub fn exti_init(perip: &Peripherals, core_perip: &mut CorePeripherals) {
     }
 }
 
-pub fn set_swier() {
-    free(|cs| match G_PERIPHERAL.borrow(cs).borrow().as_ref() {
-        None => (),
-        Some(perip) => {
-            let exti = &perip.EXTI;
-            exti.swier1.modify(|_, w| w.swier0().set_bit());
-        }
-    });
-}
-
-pub fn clear_exti() {
-    free(|cs| match G_PERIPHERAL.borrow(cs).borrow().as_ref() {
-        None => (),
-        Some(perip) => {
-            let exti = &perip.EXTI;
-            exti.rpr1.modify(|_, w| w.rpif0().set_bit());
-            exti.fpr1.modify(|_, w| w.fpif0().set_bit());
-        }
-    });
-}
 
 pub fn external_input_interrupt_task() {
     free(|cs| match G_PERIPHERAL.borrow(cs).borrow().as_ref() {
@@ -236,63 +216,6 @@ impl Tim14 {
             Some(perip) => {
                 let tim14 = &perip.TIM14;
                 tim14.sr.modify(|_, w| w.uif().clear_bit());
-            }
-        });
-    }
-}
-
-pub struct TriggerOut0 {}
-
-impl Indicator for TriggerOut0 {
-    fn on(&self) {
-        free(|cs| match G_PERIPHERAL.borrow(cs).borrow().as_ref() {
-            None => (),
-            Some(perip) => {
-                let gpioa = &perip.GPIOA;
-                gpioa.bsrr.write(|w| w.bs6().set());
-            }
-        });
-    }
-    fn off(&self) {
-        free(|cs| match G_PERIPHERAL.borrow(cs).borrow().as_ref() {
-            None => (),
-            Some(perip) => {
-                let gpioa = &perip.GPIOA;
-                gpioa.bsrr.write(|w| w.br6().reset());
-            }
-        });
-    }
-    fn toggle(&self) {
-        free(|cs| match G_PERIPHERAL.borrow(cs).borrow().as_ref() {
-            None => (),
-            Some(perip) => {
-                let gpioa = &perip.GPIOA;
-                if gpioa.odr.read().odr6().is_low() {
-                    gpioa.bsrr.write(|w| w.bs6().set());
-                } else {
-                    gpioa.bsrr.write(|w| w.br6().reset());
-                }
-            }
-        });
-    }
-}
-
-impl TriggerOut0 {
-    pub fn new() -> Self {
-        Self {}
-    }
-
-    pub fn init(&self) {
-        free(|cs| {
-            match G_PERIPHERAL.borrow(cs).borrow().as_ref() {
-                None => (),
-                Some(perip) => {
-                    // GPIOポートの電源投入(クロックの有効化)
-                    perip.RCC.iopenr.modify(|_, w| w.iopaen().set_bit());
-                    // gpioモード変更
-                    let gpioa = &perip.GPIOA;
-                    gpioa.moder.modify(|_, w| w.moder6().output());
-                }
             }
         });
     }
