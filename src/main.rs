@@ -20,9 +20,12 @@ use stm32g0::stm32g030::interrupt;
 use stm32g0::stm32g030::Interrupt::EXTI0_1;
 use stm32g0::stm32g030::Interrupt::TIM14;
 
+use crate::dc_motor_driver::DcMotorDriver;
+
 mod app;
 mod indicator;
 mod dc_motor_driver_stm32g0;
+mod dc_motor_driver;
 
 static G_APP: Mutex<
     RefCell<
@@ -60,7 +63,7 @@ fn main() -> ! {
     let mut core_perip = stm32g030::CorePeripherals::take().unwrap();
 
     dc_motor_driver_stm32g0::clock_init(&perip, &mut core_perip);
-    dc_motor_driver_stm32g0::exti_init(&perip, &mut core_perip);
+    // dc_motor_driver_stm32g0::exti_init(&perip, &mut core_perip);
 
     // init g peripheral
     dc_motor_driver_stm32g0::init_g_peripheral(perip);
@@ -71,7 +74,10 @@ fn main() -> ! {
     let led1 = dc_motor_driver_stm32g0::Led1::new();
     led1.init();
     led1.off();
+    let md = dc_motor_driver_stm32g0::DcPwm::new();
+    md.init();
 
+    md.set_pwm(1.0, 0.2);
     let app = app::App::new(led0, led1);
     free(|cs| G_APP.borrow(cs).replace(Some(app)));
 

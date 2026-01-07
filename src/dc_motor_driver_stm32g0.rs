@@ -1,5 +1,6 @@
 // interfaces
 use crate::indicator::Indicator;
+use crate::dc_motor_driver::DcMotorDriver;
 
 //
 use core::cell::RefCell;
@@ -220,6 +221,86 @@ impl Tim14 {
         });
     }
 }
+
+
+pub struct DcPwm {}
+impl<'a> DcPwm {
+    pub fn new() -> Self {
+        Self {}
+    }
+    pub fn init(&self) {
+        free(|cs| match G_PERIPHERAL.borrow(cs).borrow().as_ref() {
+            None => (),
+            Some(perip) => {
+                // GPIOポートの電源投入(クロックの有効化)
+                perip.RCC.iopenr.modify(|_, w| w.iopaen().set_bit());
+                perip.RCC.iopenr.modify(|_, w| w.iopben().set_bit());
+
+                let gpioa = &perip.GPIOA;
+                let gpiob = &perip.GPIOB;
+                // PWM pin
+                gpioa.moder.modify(|_, w| w.moder8().alternate());
+                gpiob.moder.modify(|_, w| w.moder3().alternate());
+                gpioa.afrh.modify(|_, w| w.afsel8().af2()); // TIM1 CH1
+                gpiob.afrl.modify(|_, w| w.afsel3().af1()); // TIM1 CH2
+                gpioa.ospeedr.modify(|_, w| w.ospeedr8().very_high_speed());
+                gpiob.ospeedr.modify(|_, w| w.ospeedr3().very_high_speed());
+
+                perip.RCC.apbenr2.modify(|_, w| w.tim1en().set_bit());
+
+                // For PWM
+                let tim = &perip.TIM1;
+                tim.psc.modify(|_, w| unsafe { w.bits(7 - 1) });
+                tim.arr.modify(|_, w| unsafe { w.bits(800 - 1) }); // 25kHz
+
+                // OCxM mode
+                tim.ccmr1_output().modify(|_, w| w.oc1m().pwm_mode1());
+                tim.ccmr1_output().modify(|_, w| w.oc2m().pwm_mode1());
+                // CCRx
+                tim.ccr1.modify(|_, w| unsafe { w.ccr1().bits(0) }); // x/800
+                tim.ccr2.modify(|_, w| unsafe { w.ccr2().bits(0) }); // x/800
+
+                // Set polarity
+                // tim.ccer.modify(|_, w| w.cc1p().clear_bit());
+                // tim.ccer.modify(|_, w| w.cc2p().clear_bit());
+                // PWM mode
+                // tim.cr1.modify(|_, w| unsafe { w.cms().bits(0b00) }); 
+
+                // enable tim
+                tim.cr1.modify(|_, w| w.cen().set_bit());
+                // Main output enable
+                tim.bdtr.modify(|_, w| w.moe().set_bit());
+                // CCxE enable output
+                tim.ccer.modify(|_, w| w.cc1e().set_bit());
+                tim.ccer.modify(|_, w| w.cc2e().set_bit());
+            }
+        });
+    }
+}
+
+impl DcMotorDriver for DcPwm {
+    fn enable(&self) {}
+    fn disable(&self) {}
+    /// 0~1
+    fn set_pwm(&self, direction: f32, value: f32) {
+        free(|cs| match G_PERIPHERAL.borrow(cs).borrow().as_ref() {
+            None => (),
+            Some(perip) => {
+                let tim = &perip.TIM1;
+                if direction >= 0.0 {
+                    tim.ccr1
+                        .modify(|_, w| unsafe { w.ccr1().bits((value * 800.) as u16) }); // x/800
+                    tim.ccr2.modify(|_, w| unsafe { w.ccr2().bits(0) });
+                } else {
+                    tim.ccr2
+                        .modify(|_, w| unsafe { w.ccr2().bits((value * 800.) as u16) }); // x/800
+                    tim.ccr1.modify(|_, w| unsafe { w.ccr1().bits(0) });
+                }
+            }
+        });
+    }
+}
+
 
 pub struct Led0 {}
 
