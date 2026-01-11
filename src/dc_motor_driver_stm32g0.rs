@@ -7,7 +7,7 @@ use core::cell::RefCell;
 use core::fmt::{self, Write};
 use core::time::Duration;
 
-use stm32g0::stm32g030::Interrupt;
+use stm32g0::stm32g030::{Interrupt, tim14};
 use stm32g0::stm32g030::Peripherals;
 use stm32g0::stm32g030::NVIC;
 use stm32g0::stm32g030::{exti, CorePeripherals};
@@ -69,16 +69,15 @@ pub fn clock_init(perip: &Peripherals, core_perip: &mut CorePeripherals) {
     }
     // while !perip.RCC.cfgr.read().sws().is_hse() {}
 
-    perip.RCC.apbenr1.modify(|_, w| w.tim3en().set_bit());
+    perip.RCC.apbenr2.modify(|_, w| w.tim16en().set_bit());
     perip.RCC.apbenr2.modify(|_, w| w.tim14en().set_bit());
 
-    let tim3 = &perip.TIM3;
-    tim3.psc.modify(|_, w| unsafe { w.bits(64_000 - 1) }); // 1kHz
-                                                           // tim3.arr.modify(|_, w| unsafe { w.bits(1000 - 1) });    // 1kHz
+    let tim16 = &perip.TIM16;
+    tim16.psc.modify(|_, w| unsafe { w.bits(64_000 - 1) }); // 1kHz
+                                                           // tim16.arr.modify(|_, w| unsafe { w.bits(1000 - 1) });    // 1kHz
 
-    // tim3.dier.modify(|_, w| w.uie().set_bit());
-    tim3.cr1.modify(|_, w| w.cen().set_bit());
-
+    // tim16.dier.modify(|_, w| w.uie().set_bit());
+    tim16.cr1.modify(|_, w| w.cen().set_bit());
     let tim14 = &perip.TIM14;
     tim14.psc.modify(|_, w| unsafe { w.bits(64 - 1) }); // 1us
     tim14.arr.modify(|_, w| unsafe { w.bits(10 - 1) }); // 10us
@@ -91,65 +90,13 @@ pub fn clock_init(perip: &Peripherals, core_perip: &mut CorePeripherals) {
 
     // 割り込み設定
     unsafe {
-        core_perip.NVIC.set_priority(Interrupt::TIM3, 0);
-        NVIC::unmask(Interrupt::TIM3);
+        core_perip.NVIC.set_priority(Interrupt::TIM16, 0);
+        NVIC::unmask(Interrupt::TIM16);
         core_perip.NVIC.set_priority(Interrupt::TIM14, 2);
         NVIC::unmask(Interrupt::TIM14);
     }
 }
 
-pub fn exti_init(perip: &Peripherals, core_perip: &mut CorePeripherals) {
-    // GPIOポートの電源投入(クロックの有効化)
-    perip.RCC.iopenr.modify(|_, w| w.iopaen().set_bit());
-    // gpioモード変更
-    let gpioa = &perip.GPIOA;
-    gpioa.moder.modify(|_, w| w.moder0().input());
-
-    // SYSCFGにクロック供給
-    perip.RCC.apbenr2.modify(|_, w| w.syscfgen().set_bit());
-
-    let exti = &perip.EXTI;
-
-    // Target Settings
-    // PA0 EXTI_EXTICR1.EXTI0
-    exti.exticr1.modify(|_, w| w.exti0_7().pa());
-    exti.imr1.modify(|_, w| w.im0().set_bit());
-
-    // rising and falling edge event enable through
-    // – EXTI rising trigger selection register (EXTI_RTSR1)
-    // – EXTI falling trigger selection register 1 (EXTI_FTSR1)
-    exti.rtsr1.modify(|_, w| w.tr0().enabled());
-    exti.ftsr1.modify(|_, w| w.tr0().enabled());
-
-    // EXTI_RPR1, EXTI_FPR1をチェックして割り込みが起きたか確認すればよい？
-
-    // 割り込み設定
-    unsafe {
-        core_perip.NVIC.set_priority(Interrupt::EXTI0_1, 1);
-        NVIC::unmask(Interrupt::EXTI0_1);
-    }
-}
-
-
-pub fn external_input_interrupt_task() {
-    free(|cs| match G_PERIPHERAL.borrow(cs).borrow().as_ref() {
-        None => (),
-        Some(perip) => {
-            // 高速化のためにべた書きする
-
-            let exti = &perip.EXTI;
-            // Clear exti
-            exti.rpr1.modify(|_, w| w.rpif0().set_bit());
-            exti.fpr1.modify(|_, w| w.fpif0().set_bit());
-
-            let tim14 = &perip.TIM14;
-            // Start TIM14
-            tim14.cr1.modify(|_, w| w.cen().set_bit());
-            // Reset TIM14 Count
-            tim14.egr.write(|w| w.ug().set_bit());
-        }
-    });
-}
 
 pub fn timer_interrupt_task() {
     free(|cs| match G_PERIPHERAL.borrow(cs).borrow().as_ref() {

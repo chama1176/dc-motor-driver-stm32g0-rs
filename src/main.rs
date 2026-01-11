@@ -41,12 +41,6 @@ static G_APP: Mutex<
 // 4Mbps = 0.25us = 250ns
 // 0.25 x 8bit(1Byte) x 4? = 8us?
 
-#[interrupt]
-fn EXTI0_1() {
-    // SYSCFG_ITLINE5でステータスが見れそう
-    dc_motor_driver_stm32g0::external_input_interrupt_task();
-    // defmt::warn!("exti");
-}
 
 #[interrupt]
 fn TIM14() {
@@ -90,7 +84,7 @@ fn main() -> ! {
         {
             None => (),
             Some(perip) => {
-                t = perip.TIM3.cnt.read().cnt_l().bits();
+                t = perip.TIM16.cnt.read().cnt().bits();
                 // t = perip.TIM14.cnt.read().cnt().bits();
             }
         }
@@ -106,7 +100,7 @@ fn main() -> ! {
             {
                 None => (),
                 Some(perip) => {
-                    t = perip.TIM3.cnt.read().cnt_l().bits();
+                    t = perip.TIM16.cnt.read().cnt().bits();
                     // t = perip.TIM14.cnt.read().cnt().bits();
                 }
             }
