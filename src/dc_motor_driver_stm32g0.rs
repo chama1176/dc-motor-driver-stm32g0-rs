@@ -120,50 +120,93 @@ pub fn timer_interrupt_task() {
     });
 }
 
-
-pub struct Tim14 {}
-
-impl Tim14 {
+pub struct EncoderPeripheral {}
+impl<'a> EncoderPeripheral {
     pub fn new() -> Self {
         Self {}
     }
-
-    pub fn reset_cnt(&self) {
+    pub fn init(&self) {
         free(|cs| match G_PERIPHERAL.borrow(cs).borrow().as_ref() {
             None => (),
             Some(perip) => {
-                let tim14 = &perip.TIM14;
-                tim14.egr.write(|w| w.ug().set_bit());
-            }
-        });
-    }
+                // GPIOポートの電源投入(クロックの有効化)
+                perip.RCC.iopenr.modify(|_, w| w.iopaen().set_bit());
 
-    pub fn start(&self) {
-        free(|cs| match G_PERIPHERAL.borrow(cs).borrow().as_ref() {
-            None => (),
-            Some(perip) => {
-                let tim14 = &perip.TIM14;
-                tim14.cr1.modify(|_, w| w.cen().set_bit());
-            }
-        });
-    }
+                let gpioa = &perip.GPIOA;
+                // PWM pin
+                gpioa.moder.modify(|_, w| w.moder6().alternate());
+                gpioa.moder.modify(|_, w| w.moder7().alternate());
+                gpioa.afrl.modify(|_, w| w.afsel6().af1()); // TIM3 CH1
+                gpioa.afrl.modify(|_, w| w.afsel7().af1()); // TIM3 CH2
+                gpioa.ospeedr.modify(|_, w| w.ospeedr6().very_high_speed());
+                gpioa.ospeedr.modify(|_, w| w.ospeedr7().very_high_speed());
 
-    pub fn stop(&self) {
-        free(|cs| match G_PERIPHERAL.borrow(cs).borrow().as_ref() {
-            None => (),
-            Some(perip) => {
-                let tim14 = &perip.TIM14;
-                tim14.cr1.modify(|_, w| w.cen().clear_bit());
-            }
-        });
-    }
+                perip.RCC.apbenr1.modify(|_, w| w.tim3en().set_bit());
 
-    pub fn clear_uif(&self) {
-        free(|cs| match G_PERIPHERAL.borrow(cs).borrow().as_ref() {
-            None => (),
-            Some(perip) => {
-                let tim14 = &perip.TIM14;
-                tim14.sr.modify(|_, w| w.uif().clear_bit());
+                // For PWM
+                let tim = &perip.TIM3;
+                // tim.psc.modify(|_, w| unsafe { w.bits(7 - 1) });
+                // tim.arr.modify(|_, w| unsafe { w.bits(800 - 1) }); // 25kHz
+
+                // 1. Select the proper TI1x source.
+                tim.tisel.modify(|_, w| unsafe { w.ti1sel().bits(0b0000) });
+                tim.tisel.modify(|_, w| unsafe { w.ti2sel().bits(0b0000) });
+
+                // 2. Select the active input: TIMx_CCR1 must be linked to the TI1 input, 
+                // the channel is configured in input and the TIMx_CCR1 register becomes read-only.
+                tim.ccmr1_input().modify(|_, w| unsafe { w.cc1s().bits(0b01) });
+                tim.ccmr1_input().modify(|_, w| unsafe { w.cc2s().bits(0b01) });
+
+                // 3. Program the appropriate input filter duration in relation with the signal connected to the
+                // timer. IC1F bits in the TIMx_CCMR1 register.
+                // no filter
+
+                // 4. Select the edge of the active transition on the TIx channel 
+                // by writing the CC1P and CC1NP bit in the TIMx_CCER register.
+                tim.ccer.modify(|_, w| w.cc1p().bit(false) );
+                tim.ccer.modify(|_, w| w.cc1np().bit(false) );
+                tim.ccer.modify(|_, w| w.cc2p().bit(false) );
+                tim.ccer.modify(|_, w| w.cc2np().bit(false) );
+
+                // 5. Program the input prescaler. In our example, we wish the capture to be performed at
+                // each valid transition, so the prescaler is disabled (write IC1PS bits to 00 in the
+                // TIMx_CCMR1 register).
+                tim.ccmr1_input().modify(|_, w| unsafe { w.ic1psc().bits(0b00) });
+                tim.ccmr1_input().modify(|_, w| unsafe { w.ic2psc().bits(0b00) });
+
+                // 6. Enable capture from the counter into the capture register by setting the CC1E bit in the
+                // TIMx_CCER register.
+                // CCxE enable output
+                tim.ccer.modify(|_, w| w.cc1e().set_bit());
+                tim.ccer.modify(|_, w| w.cc2e().set_bit());
+
+                // 7. If needed, enable the related interrupt request by setting the CC1IE bit in the
+                // TIMx_DIER register, and/or the DMA request by setting the CC1DE bit in the
+                // TIMx_DIER register
+                // no interrupt
+
+                // • SMS= 011 (TIMx_SMCR register, both inputs are active on both rising and falling
+                // edges)
+                tim.smcr.modify(|_, w| unsafe { w.sms().bits(0b0011) });
+
+
+                // OCxM mode
+                // tim.ccmr1_output().modify(|_, w| w.oc1m().pwm_mode1());
+                // tim.ccmr1_output().modify(|_, w| w.oc2m().pwm_mode1());
+                // CCRx
+                // tim.ccr1.modify(|_, w| unsafe { w.ccr1().bits(0) }); // x/800
+                // tim.ccr2.modify(|_, w| unsafe { w.ccr2().bits(0) }); // x/800
+
+                // Set polarity
+                // tim.ccer.modify(|_, w| w.cc1p().clear_bit());
+                // tim.ccer.modify(|_, w| w.cc2p().clear_bit());
+                // PWM mode
+                // tim.cr1.modify(|_, w| unsafe { w.cms().bits(0b00) }); 
+
+                // enable tim
+                tim.cr1.modify(|_, w| w.cen().set_bit());
+                // Main output enable
+                // tim.bdtr.modify(|_, w| w.moe().set_bit());
             }
         });
     }
