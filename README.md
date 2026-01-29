@@ -1,4 +1,4 @@
-# IMU and FSR on STM32G4 Board made from `cortex-m-quickstart`
+# DC Motor Driver Firmware made from `cortex-m-quickstart`
 
 [![Rust](https://github.com/chama1176/dc-motor-driver-stm32g0-rs/actions/workflows/rust.yml/badge.svg)](https://github.com/chama1176/dc-motor-driver-stm32g0-rs/actions/workflows/rust.yml)
 
