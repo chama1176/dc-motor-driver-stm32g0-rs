@@ -33,6 +33,8 @@ static G_APP: Mutex<
             app::App<
                 dc_motor_driver_stm32g0::Led0,
                 dc_motor_driver_stm32g0::Led1,
+                dc_motor_driver_stm32g0::Uart2,
+                dc_motor_driver_stm32g0::LocalClock,
             >,
         >,
     >,
@@ -52,7 +54,7 @@ fn main() -> ! {
     use stm32g0::stm32g030;
 
     defmt::info!("Hello from STM32G0!");
-    // stm32f401モジュールより、ペリフェラルの入り口となるオブジェクトを取得する。
+    // ペリフェラルの入り口となるオブジェクトを取得する。
     let perip = stm32g030::Peripherals::take().unwrap();
     let mut core_perip = stm32g030::CorePeripherals::take().unwrap();
 
@@ -62,20 +64,29 @@ fn main() -> ! {
     // init g peripheral
     dc_motor_driver_stm32g0::init_g_peripheral(perip);
 
-    let led0 = dc_motor_driver_stm32g0::Led0::new();
-    led0.init();
-    led0.off();
-    let led1 = dc_motor_driver_stm32g0::Led1::new();
-    led1.init();
-    led1.off();
-    let md = dc_motor_driver_stm32g0::DcPwm::new();
-    md.init();
-    let enc = dc_motor_driver_stm32g0::EncoderPeripheral::new();
-    enc.init();
+    free(|cs|{
+        // G_APPの初期化が終わるまで割り込み処理が実行されないようにクリティカルセクションを取る
 
-    md.set_pwm(1.0, 0.5);
-    let app = app::App::new(led0, led1);
-    free(|cs| G_APP.borrow(cs).replace(Some(app)));
+        let led0 = dc_motor_driver_stm32g0::Led0::new();
+        led0.init();
+        led0.off();
+        let led1 = dc_motor_driver_stm32g0::Led1::new();
+        led1.init();
+        led1.off();
+        let md = dc_motor_driver_stm32g0::DcPwm::new();
+        md.init();
+        let enc = dc_motor_driver_stm32g0::EncoderPeripheral::new();
+        enc.init();
+
+        let mut uart_rs485 = dc_motor_driver_stm32g0::Uart2::new();
+        uart_rs485.init();
+        let clock: dc_motor_driver_stm32g0::LocalClock = dc_motor_driver_stm32g0::LocalClock::new();
+        clock.init();
+
+        md.set_pwm(1.0, 0.5);
+        let app = app::App::new(led0, led1, uart_rs485, clock);
+        G_APP.borrow(cs).replace(Some(app));
+    });
 
     let mut t = 0;
     free(|cs| {

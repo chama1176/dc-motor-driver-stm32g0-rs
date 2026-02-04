@@ -120,6 +120,140 @@ pub fn timer_interrupt_task() {
     });
 }
 
+pub struct LocalClock {}
+
+impl dynamixel_f_rs::Clock for LocalClock {
+    fn get_current_time(&self) -> Duration {
+        // dummy implementation
+        Duration::from_micros(0)
+    }
+}
+
+impl LocalClock {
+    pub fn new() -> Self {
+        Self {}
+    }
+
+    pub fn init(&self) {}
+}
+
+
+// For RS485
+pub struct Uart2 {
+    pub buffer_ : dynamixel_f_rs::RingBuffer<128>,
+}
+
+impl dynamixel_f_rs::BufferInterface for Uart2 {
+    fn write_byte(&mut self, data: u8) {
+        self.putc(data);
+    }
+    fn write_bytes(&mut self, data: &[u8]) {
+        for d in data {
+            self.write_byte(*d);
+        }
+        // for d in data { defmt::info!("w 0x{:x}", d); }
+    }
+    // リングバッファから値を読み込む
+    fn read_byte(&mut self) -> Option<u8> {
+        self.buffer_.dequeue()
+    }
+    // リングバッファから値を読み込む
+    fn read_bytes(&mut self, buf: &mut [u8]) -> Option<usize> {
+        if self.buffer_.is_empty() {
+            return None;
+        }
+        for i in 0..buf.len() {
+            match self.buffer_.dequeue() {
+                Some(v) => {buf[i] = v},
+                None => {return Some(i)},
+            }
+        }
+        Some(buf.len())
+    }
+    fn clear_read_buf(&mut self) {}
+}
+
+// リングバッファにデータを流し込む用
+impl dynamixel_f_rs::QueueInterface for Uart2 {
+    fn enqueue(&mut self, data: u8) -> Result<(), ()> {
+        self.buffer_.enqueue(data)
+    }
+}
+
+impl Uart2 {
+    pub fn new() -> Self {
+        Self {
+            buffer_ : dynamixel_f_rs::RingBuffer::new(),
+        }
+    }
+
+    pub fn init(&self) {
+        free(|cs| match G_PERIPHERAL.borrow(cs).borrow().as_ref() {
+            None => (),
+            Some(perip) => {
+                // GPIOポートの電源投入(クロックの有効化)
+                perip.RCC.iopenr.modify(|_, w| w.iopaen().set_bit());
+
+                perip.RCC.apbenr1.modify(|_, w| w.usart2en().set_bit());
+
+                // gpioモード変更
+                let gpio = &perip.GPIOA;
+                gpio.moder.modify(|_, w| w.moder1().alternate());
+                gpio.moder.modify(|_, w| w.moder2().alternate());
+                gpio.moder.modify(|_, w| w.moder3().alternate());
+                gpio.afrl.modify(|_, w| w.afsel1().af1());
+                gpio.afrl.modify(|_, w| w.afsel2().af1());
+                gpio.afrl.modify(|_, w| w.afsel3().af1());
+
+                let uart = &perip.USART2;
+                // Set over sampling mode
+                uart.cr1.modify(|_, w| w.over8().clear_bit());
+                // Set parity mode
+                uart.cr1.modify(|_, w| w.pce().clear_bit());
+                // Set word length
+                uart.cr1.modify(|_, w| w.m0().clear_bit());
+                uart.cr1.modify(|_, w| w.m1().clear_bit());
+                // FIFO enable
+                uart.cr1.modify(|_, w| w.fifoen().set_bit());
+
+                // FIFO empty interrupt is generated if RXFNEIE = 1 in the USART_CR1 register
+                uart.cr1.modify(|_, w| w.rxneie().set_bit());
+                
+                // Set baud rate
+                uart.brr.modify(|_, w| unsafe { w.bits(0x4BF) }); // 140MHz / 115200
+
+                // Set stop bit
+                uart.cr2.modify(|_, w| unsafe { w.stop().bits(0b00) });
+
+                // RS485 driver enable
+                uart.cr3.modify(|_, w| w.dem().set_bit());
+
+                // Set uart enable
+                uart.cr1.modify(|_, w| w.ue().set_bit());
+
+                // Set uart recieve enable
+                uart.cr1.modify(|_, w| w.re().set_bit());
+                // Set uart transmitter enable
+                uart.cr1.modify(|_, w| w.te().set_bit());
+            }
+        });
+    }
+    fn putc(&self, c: u8) {
+        free(|cs| match G_PERIPHERAL.borrow(cs).borrow().as_ref() {
+            None => (),
+            Some(perip) => {
+                let uart = &perip.USART2;
+                uart.tdr.modify(|_, w| unsafe { w.tdr().bits(c.into()) });
+                // while uart.isr.read().tc().bit_is_set() {}
+                while uart.isr.read().txe().bit_is_clear() {}
+            }
+        });
+    }
+}
+
+
+
+
 pub struct EncoderPeripheral {}
 impl<'a> EncoderPeripheral {
     pub fn new() -> Self {
