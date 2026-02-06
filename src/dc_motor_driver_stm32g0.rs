@@ -4,15 +4,17 @@ use crate::dc_motor_driver::DcMotorDriver;
 
 //
 use core::cell::RefCell;
-use core::fmt::{self, Write};
+// use core::fmt::{self, Write};
 use core::time::Duration;
 
-use stm32g0::stm32g030::{Interrupt, tim14};
+use stm32g0::stm32g030::Interrupt;
 use stm32g0::stm32g030::Peripherals;
 use stm32g0::stm32g030::NVIC;
-use stm32g0::stm32g030::{exti, CorePeripherals};
+use stm32g0::stm32g030::CorePeripherals;
 
 use cortex_m::interrupt::{free, Mutex};
+
+
 
 pub static G_PERIPHERAL: Mutex<RefCell<Option<stm32g0::stm32g030::Peripherals>>> =
     Mutex::new(RefCell::new(None));
@@ -223,7 +225,7 @@ impl Uart2 {
                 uart.brr.modify(|_, w| unsafe { w.bits(0x4BF) }); // 140MHz / 115200
 
                 // Set stop bit
-                uart.cr2.modify(|_, w| unsafe { w.stop().bits(0b00) });
+                uart.cr2.modify(|_, w| w.stop().bits(0b00) );
 
                 // RS485 driver enable
                 uart.cr3.modify(|_, w| w.dem().set_bit());
@@ -243,7 +245,7 @@ impl Uart2 {
             None => (),
             Some(perip) => {
                 let uart = &perip.USART2;
-                uart.tdr.modify(|_, w| unsafe { w.tdr().bits(c.into()) });
+                uart.tdr.modify(|_, w| w.tdr().bits(c.into()) );
                 // while uart.isr.read().tc().bit_is_set() {}
                 while uart.isr.read().txe().bit_is_clear() {}
             }
@@ -381,8 +383,8 @@ impl<'a> DcPwm {
                 tim.ccmr1_output().modify(|_, w| w.oc1m().pwm_mode1());
                 tim.ccmr1_output().modify(|_, w| w.oc2m().pwm_mode1());
                 // CCRx
-                tim.ccr1.modify(|_, w| unsafe { w.ccr1().bits(0) }); // x/800
-                tim.ccr2.modify(|_, w| unsafe { w.ccr2().bits(0) }); // x/800
+                tim.ccr1.modify(|_, w|  w.ccr1().bits(0) ); // x/800
+                tim.ccr2.modify(|_, w|  w.ccr2().bits(0) ); // x/800
 
                 // Set polarity
                 // tim.ccer.modify(|_, w| w.cc1p().clear_bit());
@@ -413,12 +415,12 @@ impl DcMotorDriver for DcPwm {
                 let tim = &perip.TIM1;
                 if direction >= 0.0 {
                     tim.ccr1
-                        .modify(|_, w| unsafe { w.ccr1().bits((value * 800.) as u16) }); // x/800
-                    tim.ccr2.modify(|_, w| unsafe { w.ccr2().bits(0) });
+                        .modify(|_, w| w.ccr1().bits((value * 800.) as u16) ); // x/800
+                    tim.ccr2.modify(|_, w| w.ccr2().bits(0) );
                 } else {
                     tim.ccr2
-                        .modify(|_, w| unsafe { w.ccr2().bits((value * 800.) as u16) }); // x/800
-                    tim.ccr1.modify(|_, w| unsafe { w.ccr1().bits(0) });
+                        .modify(|_, w| w.ccr2().bits((value * 800.) as u16) ); // x/800
+                    tim.ccr1.modify(|_, w|  w.ccr1().bits(0) );
                 }
             }
         });

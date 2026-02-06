@@ -10,15 +10,12 @@ use panic_halt as _; // you can put a breakpoint on `rust_begin_unwind` to catch
 use defmt_rtt as _;
 
 use core::cell::RefCell;
-use core::fmt::Write;
 use core::ops::DerefMut;
 
 use cortex_m::interrupt::{free, Mutex};
 use cortex_m_rt::entry;
 
 use stm32g0::stm32g030::interrupt;
-use stm32g0::stm32g030::Interrupt::EXTI0_1;
-use stm32g0::stm32g030::Interrupt::TIM14;
 
 use crate::dc_motor_driver::DcMotorDriver;
 
@@ -78,7 +75,7 @@ fn main() -> ! {
         let enc = dc_motor_driver_stm32g0::EncoderPeripheral::new();
         enc.init();
 
-        let mut uart_rs485 = dc_motor_driver_stm32g0::Uart2::new();
+        let uart_rs485 = dc_motor_driver_stm32g0::Uart2::new();
         uart_rs485.init();
         let clock: dc_motor_driver_stm32g0::LocalClock = dc_motor_driver_stm32g0::LocalClock::new();
         clock.init();

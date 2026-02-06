@@ -1,3 +1,4 @@
+#[allow(unused)]
 pub trait DcMotorDriver {
     fn enable(&self);
     fn disable(&self);
