@@ -80,7 +80,7 @@ fn main() -> ! {
         let clock: dc_motor_driver_stm32g0::LocalClock = dc_motor_driver_stm32g0::LocalClock::new();
         clock.init();
 
-        md.set_pwm(1.0, 0.5);
+        md.set_pwm(1.0, 0.0);
         let app = app::App::new(led0, led1, uart_rs485, clock);
         G_APP.borrow(cs).replace(Some(app));
     });

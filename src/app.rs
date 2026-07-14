@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 // use core::convert::TryInto;
 
 // use dynamixel_f_rs::control_table::BitsW;
@@ -26,7 +27,8 @@ where
     pub fn new(
         led0: T0, 
         led1: T1,
-        mut buffer_interface: I,
+        #[allow(unused_mut)]
+        mut buffer_interface: I, 
         clock: C,
     ) -> Self {
         let ctd = dynamixel_f_rs::ControlTableData::new();
