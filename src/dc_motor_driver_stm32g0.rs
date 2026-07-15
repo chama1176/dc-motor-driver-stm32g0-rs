@@ -23,6 +23,11 @@ pub fn init_g_peripheral(perip: Peripherals) {
     free(|cs| G_PERIPHERAL.borrow(cs).replace(Some(perip)));
 }
 
+// TIM1: PWM for DC motor
+// TIM3: Encoder
+// TIM14: timer interrupt for control loop(1ms)
+// TIM16: Count up timer for main loop
+
 pub fn clock_init(perip: &Peripherals, core_perip: &mut CorePeripherals) {
     perip.RCC.cr.modify(|_, w| w.hsebyp().set_bit());
     perip.RCC.cr.modify(|_, w| w.hseon().set_bit());
@@ -81,8 +86,8 @@ pub fn clock_init(perip: &Peripherals, core_perip: &mut CorePeripherals) {
     // tim16.dier.modify(|_, w| w.uie().set_bit());
     tim16.cr1.modify(|_, w| w.cen().set_bit());
     let tim14 = &perip.TIM14;
-    tim14.psc.modify(|_, w| unsafe { w.bits(64 - 1) }); // 1us
-    tim14.arr.modify(|_, w| unsafe { w.bits(10 - 1) }); // 10us
+    tim14.psc.modify(|_, w| unsafe { w.bits(6_400 - 1) }); // 100us
+    tim14.arr.modify(|_, w| unsafe { w.bits(10 - 1) }); // 1ms
     tim14.cr1.modify(|_, w| w.urs().set_bit()); // UGによるSW割り込みをOFFにする
 
     // ARPE: ARRのPreloadは不要（どっちでもいい）なのでそのままにしておく

@@ -37,13 +37,91 @@ static G_APP: Mutex<
     >,
 > = Mutex::new(RefCell::new(None));
 
-// 4Mbps = 0.25us = 250ns
-// 0.25 x 8bit(1Byte) x 4? = 8us?
-
-
+// TODO: タイマ割り込みで定期処理[App]
 #[interrupt]
 fn TIM14() {
     dc_motor_driver_stm32g0::timer_interrupt_task();
+    free(|cs| match G_APP.borrow(cs).borrow_mut().deref_mut() {
+        None => (),
+        Some(app) => {
+            app.control();
+        }
+    });
+}
+
+// TODO: Dynamixel通信処理[App]
+#[interrupt]
+fn USART2() {
+    let mut recieved_flag = false;
+    // FIFOの最大サイズ+1までループでチェックする
+    for _ in 0..=9 {
+        let mut data:u8 = 0;
+        let mut return_flag = false;
+        free(|cs| match dc_motor_driver_stm32g0::G_PERIPHERAL.borrow(cs).borrow().as_ref() {
+            None => {
+                // 初期化がまだなのでreturnしてよい。
+                defmt::info!("Not initialized yet. Return");
+                return_flag = true;
+            },
+            Some(perip) => {
+                let uart = &perip.USART2;
+                // RXFNEで割り込みが入っていることの確認
+                if uart.isr.read().rxne().bit_is_clear() { // RXFNE
+                    // bufferが空になったらreturn
+                    return_flag = true;
+                } else {
+                    data = uart.rdr.read().rdr().bits() as u8;
+                    // defmt::info!("get: 0x{:x}", data);
+                    recieved_flag = true;
+                }
+            }
+        });
+        // free内部からいきなりreturnできないのでflagを使う
+        if return_flag {
+            if recieved_flag {
+                // defmt::info!("recieved flag is true");
+                break;
+            }else{
+                return;
+                // TODO: ここあやしい
+            }
+        }
+        free(|cs| match G_APP.borrow(cs).borrow_mut().deref_mut() {
+            None => {
+                // 初期化がまだなのでreturnしてよい。
+                defmt::info!("Not initialized yet. Return");
+                return_flag = true;
+            },
+            Some(app) => {
+                app.enque_uart(data);
+                // defmt::info!("enqueue");
+            }
+        });
+        if return_flag {
+            return;
+        }    
+    }
+
+    free(|cs| match G_APP.borrow(cs).borrow_mut().deref_mut() {
+        None => (),
+        Some(app) => {
+            app.parse_uart_task();
+            // defmt::info!("parse uart task finished.");
+        }
+    });
+
+    // // ここまで来ているということは正常に空にできていない
+    // defmt::error!("Something went wrong when clearing fifo.");
+    // unreachable!();
+    // free(|cs| match dc_motor_driver_stm32g0::G_PERIPHERAL.borrow(cs).borrow().as_ref() {
+    //     None => (),
+    //     Some(perip) => {
+    //         //    The RXFNE flag can also be cleared by writing 1 to the RXFRQ in the USART_RQR register
+    //         let uart = &perip.USART1;
+    //         uart.rqr.write(|w| w.rxfrq().set_bit());
+    //     }
+    // });
+
 }
 
 #[entry]
@@ -121,6 +199,7 @@ fn main() -> ! {
             free(|cs| match G_APP.borrow(cs).borrow_mut().deref_mut() {
                 None => (),
                 Some(app) => {
+                    // LED toggle
                     app.periodic_task();
                 }
             });

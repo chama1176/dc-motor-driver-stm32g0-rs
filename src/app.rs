@@ -44,4 +44,25 @@ where
         self.led0.toggle();
         self.led1.toggle();
     }
+
+    pub fn control(&self) {
+
+    }
+
+    pub fn enque_uart(&mut self, data: u8) {
+        self.dxl.uart.enqueue(data).unwrap();
+    }
+
+    pub fn parse_uart_task(&mut self) {
+        // Dxl処理(受信があった場合自動返信するはず)
+        let r = self.dxl.parse_data();
+        match r {
+            Ok(_) => {
+            }
+            Err(_e) => {
+                defmt::info!("error");
+            }
+        }
+    }
+
 }
