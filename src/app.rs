@@ -4,25 +4,29 @@
 // use dynamixel_f_rs::control_table::BitsW;
 
 use crate::indicator::Indicator;
+use motml::motor_driver::DcMotorDriver;
 
-pub struct App<T0, T1, I, C>
+pub struct App<T0, T1, I, C, D>
 where
     T0: Indicator,
     T1: Indicator,
     I: dynamixel_f_rs::BufferInterface+dynamixel_f_rs::QueueInterface,
     C: dynamixel_f_rs::Clock,
+    D: DcMotorDriver,
 {
     led0: T0,
     led1: T1,
     dxl: dynamixel_f_rs::DynamixelProtocolHandler<I, C>,
+    md: D,
 }
 
-impl<T0, T1, I, C> App<T0, T1, I, C>
+impl<T0, T1, I, C, D> App<T0, T1, I, C, D>
 where
     T0: Indicator,
     T1: Indicator,
     I: dynamixel_f_rs::BufferInterface+dynamixel_f_rs::QueueInterface,
     C: dynamixel_f_rs::Clock,
+    D: DcMotorDriver,
 {
     pub fn new(
         led0: T0, 
@@ -30,6 +34,7 @@ where
         #[allow(unused_mut)]
         mut buffer_interface: I, 
         clock: C,
+        md: D,
     ) -> Self {
         let ctd = dynamixel_f_rs::ControlTableData::new();
         let dxl =
@@ -38,15 +43,21 @@ where
             led0,
             led1,
             dxl,
+            md,
         }
     }
     pub fn periodic_task(&self) {
         self.led0.toggle();
-        self.led1.toggle();
+
+        if self.dxl.ctd.read().led() == 1{
+            self.led1.on();
+        } else {
+            self.led1.off();
+        }
     }
 
     pub fn control(&self) {
-
+        self.md.set_pwm(1.0, 0.0);
     }
 
     pub fn enque_uart(&mut self, data: u8) {

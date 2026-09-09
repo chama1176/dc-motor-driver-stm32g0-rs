@@ -1,6 +1,7 @@
 // interfaces
 use crate::indicator::Indicator;
-use crate::dc_motor_driver::DcMotorDriver;
+use motml::motor_driver::DcMotorDriver;
+use motml::encoder::Encoder;
 
 //
 use core::cell::RefCell;

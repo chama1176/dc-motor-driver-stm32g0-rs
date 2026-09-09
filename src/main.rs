@@ -17,12 +17,11 @@ use cortex_m_rt::entry;
 
 use stm32g0::stm32g030::interrupt;
 
-use crate::dc_motor_driver::DcMotorDriver;
+use motml::motor_driver::DcMotorDriver;
 
 mod app;
 mod indicator;
 mod dc_motor_driver_stm32g0;
-mod dc_motor_driver;
 
 static G_APP: Mutex<
     RefCell<
@@ -32,6 +31,7 @@ static G_APP: Mutex<
                 dc_motor_driver_stm32g0::Led1,
                 dc_motor_driver_stm32g0::Uart2,
                 dc_motor_driver_stm32g0::LocalClock,
+                dc_motor_driver_stm32g0::DcPwm,
             >,
         >,
     >,
@@ -157,9 +157,7 @@ fn main() -> ! {
         uart_rs485.init();
         let clock: dc_motor_driver_stm32g0::LocalClock = dc_motor_driver_stm32g0::LocalClock::new();
         clock.init();
-
-        md.set_pwm(1.0, 0.0);
-        let app = app::App::new(led0, led1, uart_rs485, clock);
+        let app = app::App::new(led0, led1, uart_rs485, clock, md);
         G_APP.borrow(cs).replace(Some(app));
     });
 

@@ -16,6 +16,7 @@ defmt = "0.3"
 defmt-rtt = "0.4"
 
 dynamixel-f-rs = { path = "../dynamixel-f-rs/" }
+motml = { path = "../motml-rs/" }
 
 # stm32g4xx-hal = "0.0.0"
 
