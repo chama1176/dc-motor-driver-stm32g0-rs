@@ -1,21 +1,19 @@
 // interfaces
 use crate::indicator::Indicator;
-use motml::motor_driver::DcMotorDriver;
 use motml::encoder::Encoder;
+use motml::motor_driver::DcMotorDriver;
 
 //
 use core::cell::RefCell;
 // use core::fmt::{self, Write};
 use core::time::Duration;
 
+use stm32g0::stm32g030::CorePeripherals;
 use stm32g0::stm32g030::Interrupt;
 use stm32g0::stm32g030::Peripherals;
 use stm32g0::stm32g030::NVIC;
-use stm32g0::stm32g030::CorePeripherals;
 
 use cortex_m::interrupt::{free, Mutex};
-
-
 
 pub static G_PERIPHERAL: Mutex<RefCell<Option<stm32g0::stm32g030::Peripherals>>> =
     Mutex::new(RefCell::new(None));
@@ -70,8 +68,8 @@ pub fn clock_init(perip: &Peripherals, core_perip: &mut CorePeripherals) {
     perip.RCC.cfgr.modify(|_, w| unsafe { w.sw().bits(0b010) }); // PLL
                                                                  // perip.RCC.cfgr.modify(|_, w| w.sw().hse());
     defmt::debug!("sw bit: {}", perip.RCC.cfgr.read().sw().bits());
-    while !(perip.RCC.cfgr.read().sw().bits() == 0b010) {}
-    while !(perip.RCC.cfgr.read().sws().bits() == 0b010) {
+    while perip.RCC.cfgr.read().sw().bits() != 0b010 {}
+    while perip.RCC.cfgr.read().sws().bits() != 0b010 {
         defmt::info!("sw bit: {}", perip.RCC.cfgr.read().sw().bits());
         defmt::info!("sws bit: {}", perip.RCC.cfgr.read().sws().bits());
     }
@@ -82,7 +80,7 @@ pub fn clock_init(perip: &Peripherals, core_perip: &mut CorePeripherals) {
 
     let tim16 = &perip.TIM16;
     tim16.psc.modify(|_, w| unsafe { w.bits(64_000 - 1) }); // 1kHz
-                                                           // tim16.arr.modify(|_, w| unsafe { w.bits(1000 - 1) });    // 1kHz
+                                                            // tim16.arr.modify(|_, w| unsafe { w.bits(1000 - 1) });    // 1kHz
 
     // tim16.dier.modify(|_, w| w.uie().set_bit());
     tim16.cr1.modify(|_, w| w.cen().set_bit());
@@ -104,7 +102,6 @@ pub fn clock_init(perip: &Peripherals, core_perip: &mut CorePeripherals) {
         NVIC::unmask(Interrupt::TIM14);
     }
 }
-
 
 pub fn timer_interrupt_task() {
     free(|cs| match G_PERIPHERAL.borrow(cs).borrow().as_ref() {
@@ -128,6 +125,18 @@ pub fn timer_interrupt_task() {
     });
 }
 
+pub fn start_control_timer() {
+    free(|cs| match G_PERIPHERAL.borrow(cs).borrow().as_ref() {
+        None => (),
+        Some(perip) => {
+            let tim14 = &perip.TIM14;
+            tim14.cnt.reset();
+            tim14.sr.modify(|_, w| w.uif().clear_bit());
+            tim14.cr1.modify(|_, w| w.cen().set_bit());
+        }
+    });
+}
+
 pub struct LocalClock {}
 
 impl dynamixel_f_rs::Clock for LocalClock {
@@ -145,10 +154,9 @@ impl LocalClock {
     pub fn init(&self) {}
 }
 
-
 // For RS485
 pub struct Uart2 {
-    pub buffer_ : dynamixel_f_rs::RingBuffer<128>,
+    pub buffer_: dynamixel_f_rs::RingBuffer<128>,
 }
 
 impl dynamixel_f_rs::BufferInterface for Uart2 {
@@ -170,10 +178,10 @@ impl dynamixel_f_rs::BufferInterface for Uart2 {
         if self.buffer_.is_empty() {
             return None;
         }
-        for i in 0..buf.len() {
+        for (i, byte) in buf.iter_mut().enumerate() {
             match self.buffer_.dequeue() {
-                Some(v) => {buf[i] = v},
-                None => {return Some(i)},
+                Some(v) => *byte = v,
+                None => return Some(i),
             }
         }
         Some(buf.len())
@@ -191,7 +199,7 @@ impl dynamixel_f_rs::QueueInterface for Uart2 {
 impl Uart2 {
     pub fn new() -> Self {
         Self {
-            buffer_ : dynamixel_f_rs::RingBuffer::new(),
+            buffer_: dynamixel_f_rs::RingBuffer::new(),
         }
     }
 
@@ -226,12 +234,12 @@ impl Uart2 {
 
                 // FIFO empty interrupt is generated if RXFNEIE = 1 in the USART_CR1 register
                 uart.cr1.modify(|_, w| w.rxneie().set_bit());
-                
+
                 // Set baud rate
                 uart.brr.modify(|_, w| unsafe { w.bits(0x4BF) }); // 140MHz / 115200
 
                 // Set stop bit
-                uart.cr2.modify(|_, w| w.stop().bits(0b00) );
+                uart.cr2.modify(|_, w| w.stop().bits(0b00));
 
                 // RS485 driver enable
                 uart.cr3.modify(|_, w| w.dem().set_bit());
@@ -251,7 +259,7 @@ impl Uart2 {
             None => (),
             Some(perip) => {
                 let uart = &perip.USART2;
-                uart.tdr.modify(|_, w| w.tdr().bits(c.into()) );
+                uart.tdr.modify(|_, w| w.tdr().bits(c.into()));
                 // while uart.isr.read().tc().bit_is_set() {}
                 while uart.isr.read().txe().bit_is_clear() {}
             }
@@ -259,11 +267,8 @@ impl Uart2 {
     }
 }
 
-
-
-
 pub struct EncoderPeripheral {}
-impl<'a> EncoderPeripheral {
+impl EncoderPeripheral {
     pub fn new() -> Self {
         Self {}
     }
@@ -294,27 +299,31 @@ impl<'a> EncoderPeripheral {
                 tim.tisel.modify(|_, w| unsafe { w.ti1sel().bits(0b0000) });
                 tim.tisel.modify(|_, w| unsafe { w.ti2sel().bits(0b0000) });
 
-                // 2. Select the active input: TIMx_CCR1 must be linked to the TI1 input, 
+                // 2. Select the active input: TIMx_CCR1 must be linked to the TI1 input,
                 // the channel is configured in input and the TIMx_CCR1 register becomes read-only.
-                tim.ccmr1_input().modify(|_, w| unsafe { w.cc1s().bits(0b01) });
-                tim.ccmr1_input().modify(|_, w| unsafe { w.cc2s().bits(0b01) });
+                tim.ccmr1_input()
+                    .modify(|_, w| unsafe { w.cc1s().bits(0b01) });
+                tim.ccmr1_input()
+                    .modify(|_, w| unsafe { w.cc2s().bits(0b01) });
 
                 // 3. Program the appropriate input filter duration in relation with the signal connected to the
                 // timer. IC1F bits in the TIMx_CCMR1 register.
                 // no filter
 
-                // 4. Select the edge of the active transition on the TIx channel 
+                // 4. Select the edge of the active transition on the TIx channel
                 // by writing the CC1P and CC1NP bit in the TIMx_CCER register.
-                tim.ccer.modify(|_, w| w.cc1p().bit(false) );
-                tim.ccer.modify(|_, w| w.cc1np().bit(false) );
-                tim.ccer.modify(|_, w| w.cc2p().bit(false) );
-                tim.ccer.modify(|_, w| w.cc2np().bit(false) );
+                tim.ccer.modify(|_, w| w.cc1p().bit(false));
+                tim.ccer.modify(|_, w| w.cc1np().bit(false));
+                tim.ccer.modify(|_, w| w.cc2p().bit(false));
+                tim.ccer.modify(|_, w| w.cc2np().bit(false));
 
                 // 5. Program the input prescaler. In our example, we wish the capture to be performed at
                 // each valid transition, so the prescaler is disabled (write IC1PS bits to 00 in the
                 // TIMx_CCMR1 register).
-                tim.ccmr1_input().modify(|_, w| unsafe { w.ic1psc().bits(0b00) });
-                tim.ccmr1_input().modify(|_, w| unsafe { w.ic2psc().bits(0b00) });
+                tim.ccmr1_input()
+                    .modify(|_, w| unsafe { w.ic1psc().bits(0b00) });
+                tim.ccmr1_input()
+                    .modify(|_, w| unsafe { w.ic2psc().bits(0b00) });
 
                 // 6. Enable capture from the counter into the capture register by setting the CC1E bit in the
                 // TIMx_CCER register.
@@ -331,7 +340,6 @@ impl<'a> EncoderPeripheral {
                 // edges)
                 tim.smcr.modify(|_, w| unsafe { w.sms().bits(0b0011) });
 
-
                 // OCxM mode
                 // tim.ccmr1_output().modify(|_, w| w.oc1m().pwm_mode1());
                 // tim.ccmr1_output().modify(|_, w| w.oc2m().pwm_mode1());
@@ -343,7 +351,7 @@ impl<'a> EncoderPeripheral {
                 // tim.ccer.modify(|_, w| w.cc1p().clear_bit());
                 // tim.ccer.modify(|_, w| w.cc2p().clear_bit());
                 // PWM mode
-                // tim.cr1.modify(|_, w| unsafe { w.cms().bits(0b00) }); 
+                // tim.cr1.modify(|_, w| unsafe { w.cms().bits(0b00) });
 
                 // enable tim
                 tim.cr1.modify(|_, w| w.cen().set_bit());
@@ -354,9 +362,22 @@ impl<'a> EncoderPeripheral {
     }
 }
 
+impl Encoder<u16> for EncoderPeripheral {
+    fn get_angle(&self) -> Option<u16> {
+        free(|cs| {
+            G_PERIPHERAL
+                .borrow(cs)
+                .borrow()
+                .as_ref()
+                .map(|perip| perip.TIM3.cnt.read().cnt_l().bits())
+        })
+    }
+
+    fn reset_error(&self) {}
+}
 
 pub struct DcPwm {}
-impl<'a> DcPwm {
+impl DcPwm {
     pub fn new() -> Self {
         Self {}
     }
@@ -389,14 +410,14 @@ impl<'a> DcPwm {
                 tim.ccmr1_output().modify(|_, w| w.oc1m().pwm_mode1());
                 tim.ccmr1_output().modify(|_, w| w.oc2m().pwm_mode1());
                 // CCRx
-                tim.ccr1.modify(|_, w|  w.ccr1().bits(0) ); // x/800
-                tim.ccr2.modify(|_, w|  w.ccr2().bits(0) ); // x/800
+                tim.ccr1.modify(|_, w| w.ccr1().bits(0)); // x/800
+                tim.ccr2.modify(|_, w| w.ccr2().bits(0)); // x/800
 
                 // Set polarity
                 // tim.ccer.modify(|_, w| w.cc1p().clear_bit());
                 // tim.ccer.modify(|_, w| w.cc2p().clear_bit());
                 // PWM mode
-                // tim.cr1.modify(|_, w| unsafe { w.cms().bits(0b00) }); 
+                // tim.cr1.modify(|_, w| unsafe { w.cms().bits(0b00) });
 
                 // enable tim
                 tim.cr1.modify(|_, w| w.cen().set_bit());
@@ -411,28 +432,56 @@ impl<'a> DcPwm {
 }
 
 impl DcMotorDriver for DcPwm {
-    fn enable(&self) {}
-    fn disable(&self) {}
+    fn enable(&self) {
+        free(|cs| match G_PERIPHERAL.borrow(cs).borrow().as_ref() {
+            None => (),
+            Some(perip) => {
+                let tim = &perip.TIM1;
+                tim.bdtr.modify(|_, w| w.moe().set_bit());
+                tim.ccer.modify(|_, w| w.cc1e().set_bit());
+                tim.ccer.modify(|_, w| w.cc2e().set_bit());
+            }
+        });
+    }
+    fn disable(&self) {
+        free(|cs| match G_PERIPHERAL.borrow(cs).borrow().as_ref() {
+            None => (),
+            Some(perip) => {
+                let tim = &perip.TIM1;
+                tim.ccr1.modify(|_, w| w.ccr1().bits(0));
+                tim.ccr2.modify(|_, w| w.ccr2().bits(0));
+                tim.ccer.modify(|_, w| w.cc1e().clear_bit());
+                tim.ccer.modify(|_, w| w.cc2e().clear_bit());
+                tim.bdtr.modify(|_, w| w.moe().clear_bit());
+            }
+        });
+    }
     /// 0~1
     fn set_pwm(&self, direction: f32, value: f32) {
+        let duty = if value < 0.0 {
+            0.0
+        } else if value > 1.0 {
+            1.0
+        } else if value.is_nan() {
+            0.0
+        } else {
+            value
+        };
         free(|cs| match G_PERIPHERAL.borrow(cs).borrow().as_ref() {
             None => (),
             Some(perip) => {
                 let tim = &perip.TIM1;
                 if direction >= 0.0 {
-                    tim.ccr1
-                        .modify(|_, w| w.ccr1().bits((value * 800.) as u16) ); // x/800
-                    tim.ccr2.modify(|_, w| w.ccr2().bits(0) );
+                    tim.ccr1.modify(|_, w| w.ccr1().bits((duty * 800.) as u16)); // x/800
+                    tim.ccr2.modify(|_, w| w.ccr2().bits(0));
                 } else {
-                    tim.ccr2
-                        .modify(|_, w| w.ccr2().bits((value * 800.) as u16) ); // x/800
-                    tim.ccr1.modify(|_, w|  w.ccr1().bits(0) );
+                    tim.ccr2.modify(|_, w| w.ccr2().bits((duty * 800.) as u16)); // x/800
+                    tim.ccr1.modify(|_, w| w.ccr1().bits(0));
                 }
             }
         });
     }
 }
-
 
 pub struct Led0 {}
 

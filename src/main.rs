@@ -12,30 +12,27 @@ use defmt_rtt as _;
 use core::cell::RefCell;
 use core::ops::DerefMut;
 
+use control::DEFAULT_CONTROL_PERIOD_SECONDS;
 use cortex_m::interrupt::{free, Mutex};
 use cortex_m_rt::entry;
 
 use stm32g0::stm32g030::interrupt;
 
-use motml::motor_driver::DcMotorDriver;
-
 mod app;
-mod indicator;
+mod control;
 mod dc_motor_driver_stm32g0;
+mod indicator;
 
-static G_APP: Mutex<
-    RefCell<
-        Option<
-            app::App<
-                dc_motor_driver_stm32g0::Led0,
-                dc_motor_driver_stm32g0::Led1,
-                dc_motor_driver_stm32g0::Uart2,
-                dc_motor_driver_stm32g0::LocalClock,
-                dc_motor_driver_stm32g0::DcPwm,
-            >,
-        >,
-    >,
-> = Mutex::new(RefCell::new(None));
+type FirmwareApp = app::App<
+    dc_motor_driver_stm32g0::Led0,
+    dc_motor_driver_stm32g0::Led1,
+    dc_motor_driver_stm32g0::Uart2,
+    dc_motor_driver_stm32g0::LocalClock,
+    dc_motor_driver_stm32g0::DcPwm,
+    dc_motor_driver_stm32g0::EncoderPeripheral,
+>;
+
+static G_APP: Mutex<RefCell<Option<FirmwareApp>>> = Mutex::new(RefCell::new(None));
 
 // TODO: タイマ割り込みで定期処理[App]
 #[interrupt]
@@ -55,24 +52,31 @@ fn USART2() {
     let mut recieved_flag = false;
     // FIFOの最大サイズ+1までループでチェックする
     for _ in 0..=9 {
-        let mut data:u8 = 0;
+        let mut data: u8 = 0;
         let mut return_flag = false;
-        free(|cs| match dc_motor_driver_stm32g0::G_PERIPHERAL.borrow(cs).borrow().as_ref() {
-            None => {
-                // 初期化がまだなのでreturnしてよい。
-                defmt::info!("Not initialized yet. Return");
-                return_flag = true;
-            },
-            Some(perip) => {
-                let uart = &perip.USART2;
-                // RXFNEで割り込みが入っていることの確認
-                if uart.isr.read().rxne().bit_is_clear() { // RXFNE
-                    // bufferが空になったらreturn
+        free(|cs| {
+            match dc_motor_driver_stm32g0::G_PERIPHERAL
+                .borrow(cs)
+                .borrow()
+                .as_ref()
+            {
+                None => {
+                    // 初期化がまだなのでreturnしてよい。
+                    defmt::info!("Not initialized yet. Return");
                     return_flag = true;
-                } else {
-                    data = uart.rdr.read().rdr().bits() as u8;
-                    // defmt::info!("get: 0x{:x}", data);
-                    recieved_flag = true;
+                }
+                Some(perip) => {
+                    let uart = &perip.USART2;
+                    // RXFNEで割り込みが入っていることの確認
+                    if uart.isr.read().rxne().bit_is_clear() {
+                        // RXFNE
+                        // bufferが空になったらreturn
+                        return_flag = true;
+                    } else {
+                        data = uart.rdr.read().rdr().bits() as u8;
+                        // defmt::info!("get: 0x{:x}", data);
+                        recieved_flag = true;
+                    }
                 }
             }
         });
@@ -81,7 +85,7 @@ fn USART2() {
             if recieved_flag {
                 // defmt::info!("recieved flag is true");
                 break;
-            }else{
+            } else {
                 return;
                 // TODO: ここあやしい
             }
@@ -91,7 +95,7 @@ fn USART2() {
                 // 初期化がまだなのでreturnしてよい。
                 defmt::info!("Not initialized yet. Return");
                 return_flag = true;
-            },
+            }
             Some(app) => {
                 app.enque_uart(data);
                 // defmt::info!("enqueue");
@@ -99,7 +103,7 @@ fn USART2() {
         });
         if return_flag {
             return;
-        }    
+        }
     }
 
     free(|cs| match G_APP.borrow(cs).borrow_mut().deref_mut() {
@@ -121,7 +125,6 @@ fn USART2() {
     //         uart.rqr.write(|w| w.rxfrq().set_bit());
     //     }
     // });
-
 }
 
 #[entry]
@@ -139,7 +142,7 @@ fn main() -> ! {
     // init g peripheral
     dc_motor_driver_stm32g0::init_g_peripheral(perip);
 
-    free(|cs|{
+    free(|cs| {
         // G_APPの初期化が終わるまで割り込み処理が実行されないようにクリティカルセクションを取る
 
         let led0 = dc_motor_driver_stm32g0::Led0::new();
@@ -157,9 +160,19 @@ fn main() -> ! {
         uart_rs485.init();
         let clock: dc_motor_driver_stm32g0::LocalClock = dc_motor_driver_stm32g0::LocalClock::new();
         clock.init();
-        let app = app::App::new(led0, led1, uart_rs485, clock, md);
+        let app = app::App::new(
+            led0,
+            led1,
+            uart_rs485,
+            clock,
+            md,
+            enc,
+            DEFAULT_CONTROL_PERIOD_SECONDS,
+        );
         G_APP.borrow(cs).replace(Some(app));
     });
+
+    dc_motor_driver_stm32g0::start_control_timer();
 
     let mut t = 0;
     free(|cs| {
@@ -192,7 +205,6 @@ fn main() -> ! {
             }
         });
 
-
         if t.wrapping_sub(prev) > 500 {
             free(|cs| match G_APP.borrow(cs).borrow_mut().deref_mut() {
                 None => (),
@@ -216,7 +228,6 @@ fn main() -> ! {
                     }
                 }
             });
-
 
             prev = t;
         }
