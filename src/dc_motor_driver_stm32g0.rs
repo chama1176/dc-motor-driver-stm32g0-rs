@@ -137,6 +137,13 @@ pub fn start_control_timer() {
     });
 }
 
+pub fn enable_usart2_interrupt(core_perip: &mut CorePeripherals) {
+    unsafe {
+        core_perip.NVIC.set_priority(Interrupt::USART2, 1);
+        NVIC::unmask(Interrupt::USART2);
+    }
+}
+
 pub struct LocalClock {}
 
 impl dynamixel_f_rs::Clock for LocalClock {

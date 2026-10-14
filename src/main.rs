@@ -173,6 +173,9 @@ fn main() -> ! {
         G_APP.borrow(cs).replace(Some(app));
     });
 
+    // Enable reception only after G_APP is ready for the USART2 interrupt handler.
+    dc_motor_driver_stm32g0::enable_usart2_interrupt(&mut core_perip);
+
     dc_motor_driver_stm32g0::start_control_timer();
 
     let mut t = 0;

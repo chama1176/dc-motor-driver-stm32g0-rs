@@ -79,23 +79,30 @@ where
         }
     }
 
-    pub fn init(&self){
+    pub fn init(&self) {
         // ctdの初期値は全部0
         self.dxl.ctd.modify(|_, w| w.id().bits(1));
-        
+
         self.dxl.ctd.modify(|_, w| w.model_number().bits(0x04BA)); // 0x04BA: XC330-T181-T
         self.dxl.ctd.modify(|_, w| w.firmware_version().bits(0x30));
-        self.dxl.ctd.modify(|_, w| w.baud_rate().bits(0x06)); // 0x06: 4Mbps
+        self.dxl.ctd.modify(|_, w| w.baud_rate().bits(0x02)); // 0x02: 115200bps
         self.dxl.ctd.modify(|_, w| w.return_delay_time().bits(0x00));
         self.dxl.ctd.modify(|_, w| w.drive_mode().bits(0x00));
-        self.dxl.ctd.modify(|_, w| w.operating_mode().bits(0x00)); // 0x00 current control
+        self.dxl.ctd.modify(|_, w| w.operating_mode().bits(0x03)); // 0x03: position control
+        self.dxl.ctd.modify(|_, w| w.secondary_id().bits(0xFF));
+        self.dxl.ctd.modify(|_, w| w.protocol_type().bits(0x02));
         self.dxl.ctd.modify(|_, w| w.moving_threshold().bits(0x0A)); // default
         self.dxl.ctd.modify(|_, w| w.temperature_limit().bits(0x46)); // 70℃
         self.dxl.ctd.modify(|_, w| w.max_voltage_limit().bits(0x8C)); // 14V
         self.dxl.ctd.modify(|_, w| w.min_voltage_limit().bits(0x37)); // 5.5V
+        self.dxl.ctd.modify(|_, w| w.pwm_limit().bits(885));
+        self.dxl
+            .ctd
+            .modify(|_, w| w.max_position_limit().bits(4095));
+        self.dxl.ctd.modify(|_, w| w.min_position_limit().bits(0));
+        self.dxl.ctd.modify(|_, w| w.status_return_level().bits(2));
 
         self.dxl.ctd.modify(|_, w| w.present_position().bits(-777));
-
     }
 
     pub fn periodic_task(&self) {
