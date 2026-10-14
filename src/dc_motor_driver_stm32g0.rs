@@ -242,8 +242,9 @@ impl Uart2 {
                 // FIFO empty interrupt is generated if RXFNEIE = 1 in the USART_CR1 register
                 uart.cr1.modify(|_, w| w.rxneie().set_bit());
 
-                // Set baud rate
-                uart.brr.modify(|_, w| unsafe { w.bits(0x4BF) }); // 140MHz / 115200
+                // USART2 clock: 48MHz HSE / 4 * 16 / 3 = 64MHz.
+                // BRR = round(64MHz / 115200bps) = 556 (0x22C) with OVER8 = 0.
+                uart.brr.modify(|_, w| unsafe { w.bits(0x22C) });
 
                 // Set stop bit
                 uart.cr2.modify(|_, w| w.stop().bits(0b00));
