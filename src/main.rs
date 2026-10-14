@@ -169,6 +169,7 @@ fn main() -> ! {
             enc,
             DEFAULT_CONTROL_PERIOD_SECONDS,
         );
+        app.init();
         G_APP.borrow(cs).replace(Some(app));
     });
 

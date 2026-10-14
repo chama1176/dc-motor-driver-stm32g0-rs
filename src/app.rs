@@ -59,6 +59,7 @@ where
         control_period_seconds: f32,
     ) -> Self {
         let ctd = dynamixel_f_rs::ControlTableData::new();
+
         let dxl =
             dynamixel_f_rs::DynamixelProtocolHandler::new(buffer_interface, clock, 115200, ctd);
         Self {
@@ -77,6 +78,26 @@ where
             last_operating_mode: OPERATING_MODE_POSITION,
         }
     }
+
+    pub fn init(&self){
+        // ctdの初期値は全部0
+        self.dxl.ctd.modify(|_, w| w.id().bits(1));
+        
+        self.dxl.ctd.modify(|_, w| w.model_number().bits(0x04BA)); // 0x04BA: XC330-T181-T
+        self.dxl.ctd.modify(|_, w| w.firmware_version().bits(0x30));
+        self.dxl.ctd.modify(|_, w| w.baud_rate().bits(0x06)); // 0x06: 4Mbps
+        self.dxl.ctd.modify(|_, w| w.return_delay_time().bits(0x00));
+        self.dxl.ctd.modify(|_, w| w.drive_mode().bits(0x00));
+        self.dxl.ctd.modify(|_, w| w.operating_mode().bits(0x00)); // 0x00 current control
+        self.dxl.ctd.modify(|_, w| w.moving_threshold().bits(0x0A)); // default
+        self.dxl.ctd.modify(|_, w| w.temperature_limit().bits(0x46)); // 70℃
+        self.dxl.ctd.modify(|_, w| w.max_voltage_limit().bits(0x8C)); // 14V
+        self.dxl.ctd.modify(|_, w| w.min_voltage_limit().bits(0x37)); // 5.5V
+
+        self.dxl.ctd.modify(|_, w| w.present_position().bits(-777));
+
+    }
+
     pub fn periodic_task(&self) {
         self.led0.toggle();
 

@@ -157,3 +157,14 @@ cargo run -r
 
 ## Memo
 - `cargo size --bin dc-motor-driver-stm32g0 --release -- -A`
+- 
+#### TIM16
+- 1ms周期
+
+#### TIM14
+- 1ms周期
+
+#### UART2
+- RS485
+
+  
