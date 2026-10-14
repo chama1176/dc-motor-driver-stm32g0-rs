@@ -1,5 +1,6 @@
 #![no_std]
 #![no_main]
+use motml::motor_driver::DcMotorDriver;
 
 use indicator::Indicator;
 // pick a panicking behavior
@@ -8,6 +9,7 @@ use panic_halt as _; // you can put a breakpoint on `rust_begin_unwind` to catch
                      // use panic_itm as _; // logs messages over ITM; requires ITM support
                      // use panic_semihosting as _; // logs messages to the host stderr; requires a debugger
 use defmt_rtt as _;
+
 
 use core::cell::RefCell;
 use core::ops::DerefMut;
@@ -22,6 +24,7 @@ mod app;
 mod control;
 mod dc_motor_driver_stm32g0;
 mod indicator;
+
 
 type FirmwareApp = app::App<
     dc_motor_driver_stm32g0::Led0,
@@ -160,6 +163,12 @@ fn main() -> ! {
         uart_rs485.init();
         let clock: dc_motor_driver_stm32g0::LocalClock = dc_motor_driver_stm32g0::LocalClock::new();
         clock.init();
+
+        // dc_motor_driver_stm32g0::start_control_timer();
+
+        md.enable();
+        md.set_pwm(1.0, 0.5);
+
         let app = app::App::new(
             led0,
             led1,
@@ -169,6 +178,8 @@ fn main() -> ! {
             enc,
             DEFAULT_CONTROL_PERIOD_SECONDS,
         );
+
+
         app.init();
         G_APP.borrow(cs).replace(Some(app));
     });
@@ -176,7 +187,7 @@ fn main() -> ! {
     // Enable reception only after G_APP is ready for the USART2 interrupt handler.
     dc_motor_driver_stm32g0::enable_usart2_interrupt(&mut core_perip);
 
-    dc_motor_driver_stm32g0::start_control_timer();
+    // dc_motor_driver_stm32g0::start_control_timer();
 
     let mut t = 0;
     free(|cs| {

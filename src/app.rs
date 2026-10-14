@@ -116,108 +116,112 @@ where
     }
 
     pub fn control(&mut self) {
-        self.realtime_tick = self.realtime_tick.wrapping_add(1);
+        self.md.enable();
+        self.md.set_pwm(1.0, 0.3);
 
-        let raw_position = match self.encoder.get_angle() {
-            Some(position) => position,
-            None => {
-                self.stop_motor();
-                self.encoder_tracker.reset();
-                self.velocity_filter.reset();
-                self.dxl.ctd.modify(|_, w| {
-                    w.realtime_tick()
-                        .bits(self.realtime_tick)
-                        .moving()
-                        .bits(0)
-                        .present_pwm()
-                        .bits(0)
-                        .present_velocity()
-                        .bits(0)
-                });
-                return;
-            }
-        };
+        
+        // self.realtime_tick = self.realtime_tick.wrapping_add(1);
 
-        let (encoder_position, encoder_delta) = self.encoder_tracker.update(raw_position);
-        self.present_position =
-            position_from_encoder(encoder_position, ENCODER_COUNTS_PER_OUTPUT_REVOLUTION);
-        let raw_velocity = velocity_from_encoder_delta(
-            encoder_delta,
-            ENCODER_COUNTS_PER_OUTPUT_REVOLUTION,
-            self.control_period_seconds,
-        );
-        let present_velocity = self.velocity_filter.update(
-            raw_velocity,
-            self.control_period_seconds,
-            VELOCITY_FILTER_CUTOFF_HZ,
-        ) as i32;
-        let table = self.dxl.ctd.read();
-        let torque_enabled = table.torque_enable() == 1;
-        let operating_mode = table.operating_mode();
+        // let raw_position = match self.encoder.get_angle() {
+        //     Some(position) => position,
+        //     None => {
+        //         self.stop_motor();
+        //         self.encoder_tracker.reset();
+        //         self.velocity_filter.reset();
+        //         self.dxl.ctd.modify(|_, w| {
+        //             w.realtime_tick()
+        //                 .bits(self.realtime_tick)
+        //                 .moving()
+        //                 .bits(0)
+        //                 .present_pwm()
+        //                 .bits(0)
+        //                 .present_velocity()
+        //                 .bits(0)
+        //         });
+        //         return;
+        //     }
+        // };
 
-        if torque_enabled != self.last_torque_enabled || operating_mode != self.last_operating_mode
-        {
-            self.position_pid.reset();
-        }
+        // let (encoder_position, encoder_delta) = self.encoder_tracker.update(raw_position);
+        // self.present_position =
+        //     position_from_encoder(encoder_position, ENCODER_COUNTS_PER_OUTPUT_REVOLUTION);
+        // let raw_velocity = velocity_from_encoder_delta(
+        //     encoder_delta,
+        //     ENCODER_COUNTS_PER_OUTPUT_REVOLUTION,
+        //     self.control_period_seconds,
+        // );
+        // let present_velocity = self.velocity_filter.update(
+        //     raw_velocity,
+        //     self.control_period_seconds,
+        //     VELOCITY_FILTER_CUTOFF_HZ,
+        // ) as i32;
+        // let table = self.dxl.ctd.read();
+        // let torque_enabled = table.torque_enable() == 1;
+        // let operating_mode = table.operating_mode();
 
-        let present_pwm = if !torque_enabled {
-            self.stop_motor();
-            0
-        } else {
-            match operating_mode {
-                OPERATING_MODE_POSITION => {
-                    let minimum = u32_to_i32(table.min_position_limit());
-                    let maximum = u32_to_i32(table.max_position_limit());
-                    let goal = clamp_i32(table.goal_position(), minimum, maximum);
-                    let output_limit = pwm_limit(table.pwm_limit(), table.goal_pwm()) as f32;
-                    let output = self.position_pid.update(
-                        goal,
-                        self.present_position,
-                        PositionPidParameters {
-                            p_gain_raw: table.position_pgain(),
-                            i_gain_raw: table.position_igain(),
-                            d_gain_raw: table.position_dgain(),
-                            output_limit,
-                            dt_seconds: self.control_period_seconds,
-                        },
-                    ) as i16;
-                    self.apply_pwm(output);
-                    output
-                }
-                OPERATING_MODE_PWM => {
-                    self.position_pid.reset();
-                    let limit = pwm_limit(table.pwm_limit(), PWM_RAW_MAX);
-                    let output = clamp_i16(table.goal_pwm(), -limit, limit);
-                    self.apply_pwm(output);
-                    output
-                }
-                _ => {
-                    self.stop_motor();
-                    0
-                }
-            }
-        };
+        // if torque_enabled != self.last_torque_enabled || operating_mode != self.last_operating_mode
+        // {
+        //     self.position_pid.reset();
+        // }
 
-        self.last_torque_enabled = torque_enabled;
-        self.last_operating_mode = operating_mode;
+        // let present_pwm = if !torque_enabled {
+        //     self.stop_motor();
+        //     0
+        // } else {
+        //     match operating_mode {
+        //         OPERATING_MODE_POSITION => {
+        //             let minimum = u32_to_i32(table.min_position_limit());
+        //             let maximum = u32_to_i32(table.max_position_limit());
+        //             let goal = clamp_i32(table.goal_position(), minimum, maximum);
+        //             let output_limit = pwm_limit(table.pwm_limit(), table.goal_pwm()) as f32;
+        //             let output = self.position_pid.update(
+        //                 goal,
+        //                 self.present_position,
+        //                 PositionPidParameters {
+        //                     p_gain_raw: table.position_pgain(),
+        //                     i_gain_raw: table.position_igain(),
+        //                     d_gain_raw: table.position_dgain(),
+        //                     output_limit,
+        //                     dt_seconds: self.control_period_seconds,
+        //                 },
+        //             ) as i16;
+        //             self.apply_pwm(output);
+        //             output
+        //         }
+        //         OPERATING_MODE_PWM => {
+        //             self.position_pid.reset();
+        //             let limit = pwm_limit(table.pwm_limit(), PWM_RAW_MAX);
+        //             let output = clamp_i16(table.goal_pwm(), -limit, limit);
+        //             self.apply_pwm(output);
+        //             output
+        //         }
+        //         _ => {
+        //             self.stop_motor();
+        //             0
+        //         }
+        //     }
+        // };
 
-        let moving = if i64::from(present_velocity).abs() > i64::from(table.moving_threshold()) {
-            1
-        } else {
-            0
-        };
-        self.dxl.ctd.modify(|_, w| {
-            w.realtime_tick()
-                .bits(self.realtime_tick)
-                .moving()
-                .bits(moving)
-                .present_pwm()
-                .bits(present_pwm)
-                .present_velocity()
-                .bits(present_velocity)
-                .present_position()
-                .bits(self.present_position)
-        });
+        // self.last_torque_enabled = torque_enabled;
+        // self.last_operating_mode = operating_mode;
+
+        // let moving = if i64::from(present_velocity).abs() > i64::from(table.moving_threshold()) {
+        //     1
+        // } else {
+        //     0
+        // };
+        // self.dxl.ctd.modify(|_, w| {
+        //     w.realtime_tick()
+        //         .bits(self.realtime_tick)
+        //         .moving()
+        //         .bits(moving)
+        //         .present_pwm()
+        //         .bits(present_pwm)
+        //         .present_velocity()
+        //         .bits(present_velocity)
+        //         .present_position()
+        //         .bits(self.present_position)
+        // });
     }
 
     pub fn enque_uart(&mut self, data: u8) {
