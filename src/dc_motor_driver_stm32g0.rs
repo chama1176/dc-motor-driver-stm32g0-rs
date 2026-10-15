@@ -441,28 +441,28 @@ impl DcPwm {
 
 impl DcMotorDriver for DcPwm {
     fn enable(&self) {
-        // free(|cs| match G_PERIPHERAL.borrow(cs).borrow().as_ref() {
-        //     None => (),
-        //     Some(perip) => {
-        //         let tim = &perip.TIM1;
-        //         tim.bdtr.modify(|_, w| w.moe().set_bit());
-        //         tim.ccer.modify(|_, w| w.cc1e().set_bit());
-        //         tim.ccer.modify(|_, w| w.cc2e().set_bit());
-        //     }
-        // });
+        free(|cs| match G_PERIPHERAL.borrow(cs).borrow().as_ref() {
+            None => (),
+            Some(perip) => {
+                let tim = &perip.TIM1;
+                tim.bdtr.modify(|_, w| w.moe().set_bit());
+                tim.ccer.modify(|_, w| w.cc1e().set_bit());
+                tim.ccer.modify(|_, w| w.cc2e().set_bit());
+            }
+        });
     }
     fn disable(&self) {
-        // free(|cs| match G_PERIPHERAL.borrow(cs).borrow().as_ref() {
-        //     None => (),
-        //     Some(perip) => {
-        //         let tim = &perip.TIM1;
-        //         tim.ccr1.modify(|_, w| w.ccr1().bits(0));
-        //         tim.ccr2.modify(|_, w| w.ccr2().bits(0));
-        //         tim.ccer.modify(|_, w| w.cc1e().clear_bit());
-        //         tim.ccer.modify(|_, w| w.cc2e().clear_bit());
-        //         tim.bdtr.modify(|_, w| w.moe().clear_bit());
-        //     }
-        // });
+        free(|cs| match G_PERIPHERAL.borrow(cs).borrow().as_ref() {
+            None => (),
+            Some(perip) => {
+                let tim = &perip.TIM1;
+                tim.ccr1.modify(|_, w| w.ccr1().bits(0));
+                tim.ccr2.modify(|_, w| w.ccr2().bits(0));
+                tim.ccer.modify(|_, w| w.cc1e().clear_bit());
+                tim.ccer.modify(|_, w| w.cc2e().clear_bit());
+                tim.bdtr.modify(|_, w| w.moe().clear_bit());
+            }
+        });
     }
     /// 0~1
     // fn set_pwm(&self, direction: f32, value: f32) {

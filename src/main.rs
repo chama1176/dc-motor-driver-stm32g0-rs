@@ -164,12 +164,7 @@ fn main() -> ! {
         let clock: dc_motor_driver_stm32g0::LocalClock = dc_motor_driver_stm32g0::LocalClock::new();
         clock.init();
 
-        // dc_motor_driver_stm32g0::start_control_timer();
-
-        md.enable();
-        md.set_pwm(1.0, 0.5);
-
-        let app = app::App::new(
+        let mut app = app::App::new(
             led0,
             led1,
             uart_rs485,
@@ -187,7 +182,7 @@ fn main() -> ! {
     // Enable reception only after G_APP is ready for the USART2 interrupt handler.
     dc_motor_driver_stm32g0::enable_usart2_interrupt(&mut core_perip);
 
-    // dc_motor_driver_stm32g0::start_control_timer();
+    dc_motor_driver_stm32g0::start_control_timer();
 
     let mut t = 0;
     free(|cs| {

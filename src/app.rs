@@ -117,7 +117,7 @@ where
 
     pub fn control(&mut self) {
         self.md.enable();
-        self.md.set_pwm(1.0, 0.3);
+        self.md.set_pwm(1.0, 0.5);
 
         
         // self.realtime_tick = self.realtime_tick.wrapping_add(1);
