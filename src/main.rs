@@ -164,7 +164,7 @@ fn main() -> ! {
         let clock: dc_motor_driver_stm32g0::LocalClock = dc_motor_driver_stm32g0::LocalClock::new();
         clock.init();
 
-        let mut app = app::App::new(
+        let app = app::App::new(
             led0,
             led1,
             uart_rs485,
