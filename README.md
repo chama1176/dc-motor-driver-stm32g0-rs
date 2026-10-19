@@ -155,6 +155,44 @@ $env:DEFMT_LOG="info"
 cargo run -r
 ```
 
+## Motor control
+
+位置はエンコーダカウント、速度はカウント/秒を使う。
+モーター軸11 pulse/rev、ハードウェア4逓倍後44 count/rev、減速比18.75:1で、出力軸は825 count/rev。
+起動時の位置を原点とする。Dynamixel製品の位置・速度単位とは異なる。
+
+| 設定 | デフォルト |
+| --- | --- |
+| OperatingMode | 3: 位置PID（1: 速度PI、16: PWM直接指令） |
+| Position P / I / D raw | 8192 / 11830 / 32000 |
+| Velocity P / I raw | 160 / 1640 |
+| 位置範囲 / 速度上限 | 0〜825 count / ±630 count/s |
+| PWMLimit / GoalPWM | 443 / 885（885がデューティ100%） |
+| 制御周期 / LPF | 1 ms / 位置D項20 Hz、速度PI 10 Hz |
+| TorqueEnable | 0（起動時停止） |
+
+PID/PIは出力制限とアンチワインドアップを使い、トルク・モード変更時に積分をリセットする。
+位置D項はフィルタ済み速度を使う。ゲインの連続時間換算はP=`raw/128`、I=`raw/65536/0.001`、D=`raw/16*0.001`。
+
+ビルドと実機なしのテスト:
+
+```powershell
+cargo build -r
+cargo test --offline --manifest-path tests/host/Cargo.toml --target x86_64-pc-windows-msvc
+cargo fmt --all -- --check
+cargo fmt --manifest-path tests/host/Cargo.toml --all -- --check
+```
+
+通常mainにベンチ処理は含めない。実機試験には[独立example](examples/control_bench.rs)を使う。
+**次のコマンドはモーターを動かす。** テーブルへ位置・速度指令を直接書き込み、約18.4秒でTorque Offにする。
+環境変数`CONTROL_POSITION_STUDY`、`CONTROL_POSITION_VERIFY`、`CONTROL_VELOCITY_STUDY`、
+`CONTROL_VELOCITY_VERIFY`、`CONTROL_IDENTIFY`を一種類だけ設定すると、それぞれの試験を選べる。
+試験後は環境変数を消し、通常ファームを書き戻す。ベンチのままリセットすると再び動く。
+
+```powershell
+cargo run -r --example control_bench -- --rtt-channel-mode no-block-skip --no-location --no-timestamps
+```
+
 ## Memo
 - `cargo size --bin dc-motor-driver-stm32g0 --release -- -A`
 - 

@@ -80,7 +80,8 @@ pub fn clock_init(perip: &Peripherals, core_perip: &mut CorePeripherals) {
 
     let tim16 = &perip.TIM16;
     tim16.psc.modify(|_, w| unsafe { w.bits(64_000 - 1) }); // 1kHz
-                                                            // tim16.arr.modify(|_, w| unsafe { w.bits(1000 - 1) });    // 1kHz
+    tim16.egr.write(|w| w.ug().set_bit());
+    // tim16.arr.modify(|_, w| unsafe { w.bits(1000 - 1) });    // 1kHz
 
     // tim16.dier.modify(|_, w| w.uie().set_bit());
     tim16.cr1.modify(|_, w| w.cen().set_bit());
@@ -110,17 +111,8 @@ pub fn timer_interrupt_task() {
             // 高速化のためにべた書きする
 
             let tim14 = &perip.TIM14;
-            // Stop TIM14
-            tim14.cr1.modify(|_, w| w.cen().clear_bit());
             // Clear tif
             tim14.sr.modify(|_, w| w.uif().clear_bit());
-            // Toggle trigger out
-            let gpioa = &perip.GPIOA;
-            if gpioa.odr.read().odr6().is_low() {
-                gpioa.bsrr.write(|w| w.bs6().set());
-            } else {
-                gpioa.bsrr.write(|w| w.br6().reset());
-            }
         }
     });
 }
@@ -130,6 +122,8 @@ pub fn start_control_timer() {
         None => (),
         Some(perip) => {
             let tim14 = &perip.TIM14;
+            // Load the buffered prescaler before the first control interval.
+            tim14.egr.write(|w| w.ug().set_bit());
             tim14.cnt.reset();
             tim14.sr.modify(|_, w| w.uif().clear_bit());
             tim14.cr1.modify(|_, w| w.cen().set_bit());

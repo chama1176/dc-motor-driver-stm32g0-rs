@@ -1,0 +1,10 @@
+[package]
+name = "motor-control-host-tests"
+version = "0.1.0"
+edition = "2018"
+publish = false
+
+[dependencies]
+dynamixel-f-rs = { path = "../../../dynamixel-f-rs" }
+motml = { path = "../../../motml-rs" }
+defmt = { version = "0.3", features = ["unstable-test"] }

@@ -4,6 +4,13 @@
 Cargo.lock
 target/
 
+# Local measurements, analysis output, and dated work records
+*.log
+/validation/
+/docs/control-validation-*.md
+/docs/position-control-study-*.md
+/docs/velocity-control-study-*.md
+
 # editor files
 .vscode/*
 !.vscode/*.md

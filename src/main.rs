@@ -1,7 +1,5 @@
 #![no_std]
 #![no_main]
-use motml::motor_driver::DcMotorDriver;
-
 use indicator::Indicator;
 // pick a panicking behavior
 use panic_halt as _; // you can put a breakpoint on `rust_begin_unwind` to catch panics
@@ -9,7 +7,6 @@ use panic_halt as _; // you can put a breakpoint on `rust_begin_unwind` to catch
                      // use panic_itm as _; // logs messages over ITM; requires ITM support
                      // use panic_semihosting as _; // logs messages to the host stderr; requires a debugger
 use defmt_rtt as _;
-
 
 use core::cell::RefCell;
 use core::ops::DerefMut;
@@ -24,7 +21,6 @@ mod app;
 mod control;
 mod dc_motor_driver_stm32g0;
 mod indicator;
-
 
 type FirmwareApp = app::App<
     dc_motor_driver_stm32g0::Led0,
@@ -174,7 +170,6 @@ fn main() -> ! {
             DEFAULT_CONTROL_PERIOD_SECONDS,
         );
 
-
         app.init();
         G_APP.borrow(cs).replace(Some(app));
     });
@@ -221,21 +216,6 @@ fn main() -> ! {
                 Some(app) => {
                     // LED toggle
                     app.periodic_task();
-                }
-            });
-
-            free(|cs| {
-                match dc_motor_driver_stm32g0::G_PERIPHERAL
-                    .borrow(cs)
-                    .borrow()
-                    .as_ref()
-                {
-                    None => (),
-                    Some(perip) => {
-                        let cnt_l = perip.TIM3.cnt.read().cnt_l().bits();
-                        let cnt_h = perip.TIM3.cnt.read().cnt_h().bits();
-                        defmt::info!("cnt_l: {}, cnt_h: {}", cnt_l, cnt_h);
-                    }
                 }
             });
 
